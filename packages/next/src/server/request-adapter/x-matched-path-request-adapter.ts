@@ -158,11 +158,16 @@ export class XMatchedPathRequestAdapter<
       // Mark the request as a RSC request.
       req.headers[RSC_HEADER.toLowerCase()] = '1'
       addRequestMeta(req, 'isRSCRequest', true)
+      addRequestMeta(req, 'isPrefetchRSCRequest', false)
     } else {
       // We didn't match any route based matchers above, but we're in minimal
       // mode, so we should remove any headers from the request that are related
       // to flight data.
       stripFlightHeaders(req.headers)
+
+      // Mark the request as not a RSC request.
+      addRequestMeta(req, 'isRSCRequest', false)
+      addRequestMeta(req, 'isPrefetchRSCRequest', false)
       return
     }
 

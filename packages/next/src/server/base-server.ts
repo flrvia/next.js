@@ -750,28 +750,28 @@ export default abstract class Server<
     await this.prepare()
     const method = req.method.toUpperCase()
 
-    // TODO: this is incorrect, the RSC check is request adapter specific
-    const rsc = isRSCRequestCheck(req) ? 'RSC ' : ''
-
     const tracer = getTracer()
     return tracer.withPropagatedContext(req.headers, () => {
       return tracer.trace(
         BaseServerSpan.handleRequest,
         {
-          spanName: `${rsc}${method} ${req.url}`,
+          spanName: `${method} ${req.url}`,
           kind: SpanKind.SERVER,
           attributes: {
             'http.method': method,
             'http.target': req.url,
-            'next.rsc': Boolean(rsc),
           },
         },
         async (span) =>
           this.handleRequestImpl(req, res, parsedUrl).finally(() => {
             if (!span) return
+
+            const isRSCRequest = isRSCRequestCheck(req)
             span.setAttributes({
               'http.status_code': res.statusCode,
+              'next.rsc': isRSCRequest,
             })
+
             const rootSpanAttributes = tracer.getRootSpanAttributes()
             // We were unable to get attributes, probably OTEL is not enabled
             if (!rootSpanAttributes) return
@@ -790,13 +790,17 @@ export default abstract class Server<
 
             const route = rootSpanAttributes.get('next.route')
             if (route) {
-              const newName = `${rsc}${method} ${route}`
+              const name = isRSCRequest
+                ? `RSC ${method} ${route}`
+                : `${method} ${route}`
               span.setAttributes({
                 'next.route': route,
                 'http.route': route,
-                'next.span_name': newName,
+                'next.span_name': name,
               })
-              span.updateName(newName)
+              span.updateName(name)
+            } else if (isRSCRequest) {
+              span.updateName(`RSC ${method} ${req.url}`)
             }
           })
       )
@@ -3118,6 +3122,19 @@ export default abstract class Server<
   }
 }
 
+/**
+ * Check if the request is a RSC request. This is only attached after the
+ * `handle` method is called, or at least the `requestAdapter.adapt` is called
+ * on the request.
+ */
 export function isRSCRequestCheck(req: BaseNextRequest): boolean {
-  return getRequestMeta(req, 'isRSCRequest') === true
+  const isRSCRequest = getRequestMeta(req, 'isRSCRequest')
+  if (typeof isRSCRequest !== 'boolean') {
+    // If the RSC request metadata is missing, then we should throw an error. It
+    // means it's being called before it's checked (which will lead to false
+    // negatives).
+    throw new Error('Invariant: missing isRSCRequest metadata')
+  }
+
+  return isRSCRequest
 }
