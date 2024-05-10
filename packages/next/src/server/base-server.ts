@@ -131,11 +131,11 @@ import { isNodeNextRequest, isNodeNextResponse } from './base-http/helpers'
 import { patchSetHeaderWithCookieSupport } from './lib/patch-set-header'
 import { checkIsAppPPREnabled } from './lib/experimental/ppr'
 import type { RequestAdapter } from './request-adapter/request-adapter'
-import { MinimalRequestAdapter } from './request-adapter/minimal-mode-request-adapter'
+import { XMatchedPathRequestAdapter } from './request-adapter/x-matched-path-request-adapter'
 import {
-  InvokeError,
-  InternalRequestAdapter,
-} from './request-adapter/internal-request-adapter'
+  XInvokeError,
+  XInvokePathRequestAdapter,
+} from './request-adapter/x-invoke-path-request-adapter'
 import { BaseRequestAdapter } from './request-adapter/base-request-adapter'
 import { BubbledError, isBubbledError } from './lib/trace/bubble-error'
 
@@ -553,7 +553,7 @@ export default abstract class Server<
 
     // Setup the request adapter.
     if (this.minimalMode && process.env.NEXT_RUNTIME !== 'edge') {
-      this.requestAdapter = new MinimalRequestAdapter(
+      this.requestAdapter = new XMatchedPathRequestAdapter(
         this.buildId,
         this.enabledDirectories,
         this.i18nProvider,
@@ -562,7 +562,7 @@ export default abstract class Server<
         this.getRoutesManifest.bind(this)
       )
     } else if (!customServer && process.env.NEXT_RUNTIME !== 'edge') {
-      this.requestAdapter = new InternalRequestAdapter(
+      this.requestAdapter = new XInvokePathRequestAdapter(
         this.enabledDirectories,
         this.i18nProvider,
         this.nextConfig
@@ -942,7 +942,7 @@ export default abstract class Server<
 
       return
     } catch (err: any) {
-      if (err instanceof InvokeError) {
+      if (err instanceof XInvokeError) {
         res.statusCode = err.statusCode
         return this.renderError(err.cause, req, res, '/_error', err.query)
       }

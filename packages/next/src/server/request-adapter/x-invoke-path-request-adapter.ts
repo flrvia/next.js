@@ -8,7 +8,7 @@ import {
 } from '../request-meta'
 import { BaseRequestAdapter } from './base-request-adapter'
 
-export class InvokeError {
+export class XInvokeError {
   constructor(
     public readonly statusCode: number,
     public readonly cause: Error | null,
@@ -16,14 +16,16 @@ export class InvokeError {
   ) {}
 }
 
-export class InternalRequestAdapter<
+export class XInvokePathRequestAdapter<
   ServerRequest extends BaseNextRequest,
 > extends BaseRequestAdapter<ServerRequest> {
   public async adapt(req: ServerRequest, parsedURL: NextUrlWithParsedQuery) {
     const invokePath = req.headers['x-invoke-path']
 
-    // If there's no path to invoke, do nothing.
-    if (!invokePath || typeof invokePath !== 'string') return
+    // If there's no path to invoke, just adapt using the base adapter.
+    if (!invokePath || typeof invokePath !== 'string') {
+      return super.adapt(req, parsedURL)
+    }
 
     // Strip any internal query parameters from the query object that aren't
     // associated with internal Next.js
@@ -53,7 +55,7 @@ export class InternalRequestAdapter<
         }
       }
 
-      throw new InvokeError(statusCode, cause, parsedURL.query)
+      throw new XInvokeError(statusCode, cause, parsedURL.query)
     }
 
     // Save a copy of the original unmodified pathname so we can see if we
