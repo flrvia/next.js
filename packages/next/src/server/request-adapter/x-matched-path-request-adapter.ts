@@ -163,6 +163,7 @@ export class XMatchedPathRequestAdapter<
       // mode, so we should remove any headers from the request that are related
       // to flight data.
       stripFlightHeaders(req.headers)
+      return
     } else {
       return super.attachRSCRequestMetadata(req, parsedURL)
     }
