@@ -766,7 +766,7 @@ export default abstract class Server<
           this.handleRequestImpl(req, res, parsedUrl).finally(() => {
             if (!span) return
 
-            const isRSCRequest = getRequestMeta(req, 'isRSCRequest')
+            const isRSCRequest = getRequestMeta(req, 'isRSCRequest') ?? false
             span.setAttributes({
               'http.status_code': res.statusCode,
               'next.rsc': isRSCRequest,
