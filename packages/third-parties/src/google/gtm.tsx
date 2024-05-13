@@ -24,13 +24,15 @@ export function GoogleTagManager(props: GTMParams) {
     // existing API.
     // The performance measurement will be handled by Chrome Aurora
 
-    performance.mark('mark_feature_usage', {
-      detail: {
-        feature: 'next-third-parties-gtm',
-      },
-    })
-  }, [])
-
+    if (typeof window !== 'undefined' && window.performance && window.performance.mark) {
+            performance.mark('mark_feature_usage', {
+                detail: {
+                    feature: 'next-third-parties-gtm',
+                },
+            });
+        }
+    }, []);
+  
   return (
     <>
       <Script
