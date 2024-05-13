@@ -6,9 +6,9 @@ import { BaseServerSpan } from '../lib/trace/constants'
 import { getTracer } from '../lib/trace/tracer'
 import type { CacheScope } from './react-cache-scope'
 import { ResponseCookies } from '../web/spec-extension/cookies'
-import type { RequestLifecycleOpts } from '../base-server'
-import type { AfterCallback, AfterTask, WaitUntilFn } from './shared'
+import type { AfterCallback, AfterTask } from './shared'
 import { InvariantError } from '../../shared/lib/invariant-error'
+import type { RequestLifecycleStore } from '../../client/components/request-lifecycle-async-storage.external'
 
 export interface AfterContext {
   run<T>(requestStore: RequestStore, callback: () => T): T
@@ -16,8 +16,8 @@ export interface AfterContext {
 }
 
 export type AfterContextOpts = {
-  waitUntil: WaitUntilFn | undefined
-  onClose: RequestLifecycleOpts['onClose'] | undefined
+  waitUntil: RequestLifecycleStore['waitUntil'] | undefined
+  onClose: RequestLifecycleStore['onClose'] | undefined
   cacheScope: CacheScope | undefined
 }
 
@@ -26,8 +26,8 @@ export function createAfterContext(opts: AfterContextOpts): AfterContext {
 }
 
 export class AfterContextImpl implements AfterContext {
-  private waitUntil: WaitUntilFn | undefined
-  private onClose: RequestLifecycleOpts['onClose'] | undefined
+  private waitUntil: AfterContextOpts['waitUntil']
+  private onClose: AfterContextOpts['onClose']
   private cacheScope: CacheScope | undefined
 
   private requestStore: RequestStore | undefined

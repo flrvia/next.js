@@ -105,6 +105,7 @@ import { formatDynamicImportPath } from '../lib/format-dynamic-import-path'
 import type { NextFontManifest } from '../build/webpack/plugins/next-font-manifest-plugin'
 import { isInterceptionRouteRewrite } from '../lib/generate-interception-routes-rewrites'
 import { stripNextRscUnionQuery } from '../lib/url'
+import { requestLifecycleAsyncStorage } from '../client/components/request-lifecycle-async-storage.external'
 
 export * from './base-server'
 
@@ -1249,6 +1250,32 @@ export default class NextNodeServer extends BaseServer<
       }
       return handler(normalizedReq, normalizedRes, parsedUrl)
     }
+  }
+
+  protected wrapWithLifecycle<T>(
+    _req: NodeNextRequest,
+    res: NodeNextResponse,
+    callback: () => T
+  ): T {
+    if (!this.nextConfig.experimental.after) {
+      return callback()
+    }
+    return requestLifecycleAsyncStorage.run(
+      {
+        onClose(cb) {
+          return res.onClose(cb)
+        },
+        waitUntil(promise) {
+          // if we're not running in a serverless environment,
+          // we don't actually need waitUntil -- the server will stay alive anyway.
+          // the only thing we want to do is prevent unhandled rejections.
+          promise.catch((err) => {
+            console.error(err)
+          })
+        },
+      },
+      callback
+    )
   }
 
   public async revalidate({

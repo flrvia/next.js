@@ -143,7 +143,6 @@ import type { DeepReadonly } from '../shared/lib/deep-readonly'
 import { isNodeNextRequest, isNodeNextResponse } from './base-http/helpers'
 import { patchSetHeaderWithCookieSupport } from './lib/patch-set-header'
 import { checkIsAppPPREnabled } from './lib/experimental/ppr'
-import { getBuiltinWaitUntil } from './after/wait-until-builtin'
 
 export type FindComponentsResult = {
   components: LoadComponentsReturnType
@@ -230,14 +229,7 @@ export interface Options {
 
 export type RenderOpts = PagesRenderOptsPartial & AppRenderOptsPartial
 
-export type LoadedRenderOpts = RenderOpts &
-  LoadComponentsReturnType &
-  RequestLifecycleOpts
-
-export type RequestLifecycleOpts = {
-  waitUntil: ((promise: Promise<any>) => void) | undefined
-  onClose: ((callback: () => void) => void) | undefined
-}
+export type LoadedRenderOpts = RenderOpts & LoadComponentsReturnType
 
 type BaseRenderOpts = RenderOpts & {
   poweredByHeader: boolean
@@ -835,7 +827,9 @@ export default abstract class Server<
           },
         },
         async (span) =>
-          this.handleRequestImpl(req, res, parsedUrl).finally(() => {
+          this.wrapWithLifecycle(req, res, () =>
+            this.handleRequestImpl(req, res, parsedUrl)
+          ).finally(() => {
             if (!span) return
             span.setAttributes({
               'http.status_code': res.statusCode,
@@ -1413,6 +1407,14 @@ export default abstract class Server<
     }
   }
 
+  protected wrapWithLifecycle<T>(
+    _req: ServerRequest,
+    _res: ServerResponse,
+    callback: () => T
+  ): T {
+    return callback()
+  }
+
   /**
    * Normalizes a pathname without attaching any metadata from any matched
    * normalizer.
@@ -1647,26 +1649,6 @@ export default abstract class Server<
     return getTracer().trace(BaseServerSpan.render, async () =>
       this.renderImpl(req, res, pathname, query, parsedUrl, internalRender)
     )
-  }
-
-  private getWaitUntil() {
-    const useBuiltinWaitUntil =
-      process.env.NEXT_RUNTIME === 'edge' || this.minimalMode
-
-    let waitUntil = useBuiltinWaitUntil ? getBuiltinWaitUntil() : undefined
-
-    if (!waitUntil) {
-      // if we're not running in a serverless environment,
-      // we don't actually need waitUntil -- the server will stay alive anyway.
-      // the only thing we want to do is prevent unhandled rejections.
-      waitUntil = function noopWaitUntil(promise) {
-        promise.catch((err: unknown) => {
-          console.error(err)
-        })
-      }
-    }
-
-    return waitUntil
   }
 
   private async renderImpl(
@@ -2339,8 +2321,6 @@ export default abstract class Server<
         isDraftMode: isPreviewMode,
         isServerAction,
         postponed,
-        waitUntil: this.getWaitUntil(),
-        onClose: res.onClose.bind(res),
       }
 
       if (isDebugPPRSkeleton) {
@@ -2381,8 +2361,6 @@ export default abstract class Server<
               supportsDynamicHTML,
               incrementalCache,
               isRevalidate: isSSG,
-              waitUntil: this.getWaitUntil(),
-              onClose: res.onClose.bind(res),
             },
           }
 

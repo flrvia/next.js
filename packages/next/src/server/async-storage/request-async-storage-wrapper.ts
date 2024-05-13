@@ -21,7 +21,7 @@ import type { ResponseCookies } from '../web/spec-extension/cookies'
 import { RequestCookies } from '../web/spec-extension/cookies'
 import { DraftModeProvider } from './draft-mode-provider'
 import { createAfterContext, type AfterContext } from '../after/after-context'
-import type { RequestLifecycleOpts } from '../base-server'
+import type { RequestLifecycleStore } from '../../client/components/request-lifecycle-async-storage.external'
 
 function getHeaders(headers: Headers | IncomingHttpHeaders): ReadonlyHeaders {
   const cleaned = HeadersAdapter.from(headers)
@@ -48,7 +48,6 @@ function getMutableCookies(
 }
 
 export type WrapperRenderOpts = RenderOpts &
-  Partial<RequestLifecycleOpts> &
   RenderOptsForRouteHandlerPartial &
   RenderOptsForWebServerPartial
 
@@ -67,6 +66,7 @@ export type RequestContext = {
   req: IncomingMessage | BaseNextRequest | NextRequest
   res?: ServerResponse | BaseNextResponse
   renderOpts?: WrapperRenderOpts
+  lifecycle: RequestLifecycleStore | undefined
 }
 
 export const RequestAsyncStorageWrapper: AsyncStorageWrapper<
@@ -84,7 +84,7 @@ export const RequestAsyncStorageWrapper: AsyncStorageWrapper<
    */
   wrap<Result>(
     storage: AsyncLocalStorage<RequestStore>,
-    { req, res, renderOpts }: RequestContext,
+    { req, res, renderOpts, lifecycle }: RequestContext,
     callback: (store: RequestStore) => Result
   ): Result {
     let previewProps: __ApiPreviewProps | undefined = undefined
@@ -94,7 +94,10 @@ export const RequestAsyncStorageWrapper: AsyncStorageWrapper<
       previewProps = (renderOpts as any).previewProps
     }
 
-    const [wrapWithAfter, afterContext] = createAfterWrapper(renderOpts)
+    const [wrapWithAfter, afterContext] = createAfterWrapper(
+      renderOpts,
+      lifecycle
+    )
 
     function defaultOnUpdateCookies(cookies: string[]) {
       if (res) {
@@ -177,7 +180,8 @@ export const RequestAsyncStorageWrapper: AsyncStorageWrapper<
 }
 
 function createAfterWrapper(
-  renderOpts: WrapperRenderOpts | undefined
+  renderOpts: WrapperRenderOpts | undefined,
+  lifecycle: RequestLifecycleStore | undefined
 ): [
   wrap: <Result>(requestStore: RequestStore, callback: () => Result) => Result,
   afterContext: AfterContext | undefined,
@@ -187,7 +191,7 @@ function createAfterWrapper(
     return [(_, callback) => callback(), undefined]
   }
 
-  const { waitUntil, onClose } = renderOpts
+  const { waitUntil, onClose } = lifecycle ?? {}
   const cacheScope = renderOpts.ComponentMod?.createCacheScope()
 
   const afterContext = createAfterContext({

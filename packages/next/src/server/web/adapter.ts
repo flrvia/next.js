@@ -13,16 +13,14 @@ import { stripInternalSearchParams } from '../internal-utils'
 import { normalizeRscURL } from '../../shared/lib/router/utils/app-paths'
 import { FLIGHT_PARAMETERS } from '../../client/components/app-router-headers'
 import { ensureInstrumentationRegistered } from './globals'
-import {
-  RequestAsyncStorageWrapper,
-  type WrapperRenderOpts,
-} from '../async-storage/request-async-storage-wrapper'
+import { RequestAsyncStorageWrapper } from '../async-storage/request-async-storage-wrapper'
 import { requestAsyncStorage } from '../../client/components/request-async-storage.external'
+import type { RequestLifecycleStore } from '../../client/components/request-lifecycle-async-storage.external'
+import { CloseController } from './web-on-close'
 import { getTracer } from '../lib/trace/tracer'
 import type { TextMapGetter } from 'next/dist/compiled/@opentelemetry/api'
 import { MiddlewareSpan } from '../lib/trace/constants'
 import type { RenderOptsPartial } from '../app-render/types'
-import { CloseController } from './web-on-close'
 
 export class NextRequestHint extends NextRequest {
   sourcePage: string
@@ -222,13 +220,16 @@ export async function adapter(
         params.request.nextConfig?.experimental?.after ??
         !!process.env.__NEXT_AFTER
 
-      let waitUntil: WrapperRenderOpts['waitUntil'] = undefined
+      let waitUntil: RequestLifecycleStore['waitUntil'] = undefined
       let closeController: CloseController | undefined = undefined
 
       if (isAfterEnabled) {
         waitUntil = event.waitUntil.bind(event)
         closeController = new CloseController()
       }
+      const onClose = closeController
+        ? closeController.onClose.bind(closeController)
+        : undefined
 
       return getTracer().trace(
         MiddlewareSpan.execute,
@@ -255,13 +256,13 @@ export async function adapter(
                     previewModeEncryptionKey: '',
                     previewModeSigningKey: '',
                   },
-                  waitUntil,
-                  onClose: closeController
-                    ? closeController.onClose.bind(closeController)
-                    : undefined,
                   experimental: {
                     after: isAfterEnabled,
                   } as RenderOptsPartial['experimental'],
+                },
+                lifecycle: {
+                  onClose,
+                  waitUntil,
                 },
               },
               () => params.handler(request, event)

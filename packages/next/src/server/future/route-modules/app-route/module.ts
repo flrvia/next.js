@@ -50,6 +50,7 @@ import { getIsServerAction } from '../../../lib/server-action-request-meta'
 import { RequestCookies } from 'next/dist/compiled/@edge-runtime/cookies'
 import { cleanURL } from './helpers/clean-url'
 import { StaticGenBailoutError } from '../../../../client/components/static-generation-bailout'
+import { requestLifecycleAsyncStorage } from '../../../../client/components/request-lifecycle-async-storage.external'
 
 /**
  * The AppRouteModule is the type of the module exported by the bundled App
@@ -248,12 +249,11 @@ export class AppRouteRouteModule extends RouteModule<
     // Get the context for the request.
     const requestContext: RequestContext = {
       req: rawRequest,
+      lifecycle: requestLifecycleAsyncStorage.getStore(),
     }
 
     requestContext.renderOpts = {
       previewProps: context.prerenderManifest.preview,
-      waitUntil: context.renderOpts.waitUntil,
-      onClose: context.renderOpts.onClose,
       // @ts-expect-error: not all required properties are available here for some reason
       experimental: context.renderOpts.experimental,
     }

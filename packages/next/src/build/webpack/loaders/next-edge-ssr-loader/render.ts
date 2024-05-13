@@ -20,6 +20,7 @@ import { internal_getCurrentFunctionWaitUntil } from '../../../../server/web/int
 import type { PAGE_TYPES } from '../../../../lib/page-types'
 import type { NextRequestHint } from '../../../../server/web/adapter'
 import type { DeepReadonly } from '../../../../shared/lib/deep-readonly'
+import { requestLifecycleAsyncStorage } from '../../../../client/components/request-lifecycle-async-storage.external'
 
 export function getRender({
   dev,
@@ -157,14 +158,27 @@ export function getRender({
     request: NextRequestHint,
     event?: NextFetchEvent
   ) {
+    const isAfterEnabled = !!process.env.__NEXT_AFTER
+
     const extendedReq = new WebNextRequest(request)
     const extendedRes = new WebNextResponse(
       undefined,
       // tracking onClose adds overhead, so only do it if `experimental.after` is on.
-      !!process.env.__NEXT_AFTER
+      isAfterEnabled
     )
 
-    handler(extendedReq, extendedRes)
+    if (isAfterEnabled) {
+      requestLifecycleAsyncStorage.run(
+        {
+          waitUntil: event?.waitUntil?.bind(event),
+          onClose: extendedRes.onClose.bind(extendedRes),
+        },
+        () => handler(extendedReq, extendedRes)
+      )
+    } else {
+      handler(extendedReq, extendedRes)
+    }
+
     const result = await extendedRes.toResponse()
 
     if (event?.waitUntil) {

@@ -14,8 +14,11 @@ import type { NextFetchEvent } from './spec-extension/fetch-event'
 import { internal_getCurrentFunctionWaitUntil } from './internal-edge-wait-until'
 import { getUtils } from '../server-utils'
 import { searchParamsToUrlQuery } from '../../shared/lib/router/utils/querystring'
-import type { RequestLifecycleOpts } from '../base-server'
 import { CloseController, trackStreamConsumed } from './web-on-close'
+import {
+  requestLifecycleAsyncStorage,
+  type RequestLifecycleStore,
+} from '../../client/components/request-lifecycle-async-storage.external'
 
 type WrapOptions = Partial<Pick<AdapterOptions, 'page'>>
 
@@ -91,13 +94,16 @@ export class EdgeRouteModuleWrapper {
 
     const isAfterEnabled = !!process.env.__NEXT_AFTER
 
-    let waitUntil: RequestLifecycleOpts['waitUntil'] = undefined
+    let waitUntil: RequestLifecycleStore['waitUntil'] = undefined
     let closeController: CloseController | undefined
 
     if (isAfterEnabled) {
       waitUntil = evt.waitUntil.bind(evt)
       closeController = new CloseController()
     }
+    const onClose = closeController
+      ? closeController.onClose.bind(closeController)
+      : undefined
 
     // Create the context for the handler. This contains the params from the
     // match (if any).
@@ -116,10 +122,6 @@ export class EdgeRouteModuleWrapper {
       },
       renderOpts: {
         supportsDynamicHTML: true,
-        waitUntil,
-        onClose: closeController
-          ? closeController.onClose.bind(closeController)
-          : undefined,
         experimental: {
           after: isAfterEnabled,
         },
@@ -127,7 +129,18 @@ export class EdgeRouteModuleWrapper {
     }
 
     // Get the response from the handler.
-    let res = await this.routeModule.handle(request, context)
+    let res: Response
+    if (isAfterEnabled) {
+      res = await requestLifecycleAsyncStorage.run(
+        {
+          waitUntil,
+          onClose,
+        },
+        () => this.routeModule.handle(request, context)
+      )
+    } else {
+      res = await this.routeModule.handle(request, context)
+    }
 
     const waitUntilPromises = [internal_getCurrentFunctionWaitUntil()]
     if (context.renderOpts.pendingWaitUntil) {

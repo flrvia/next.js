@@ -110,6 +110,7 @@ import {
 import { createServerModuleMap } from './action-utils'
 import { isNodeNextRequest } from '../base-http/helpers'
 import { parseParameter } from '../../shared/lib/router/utils/route-regex'
+import { requestLifecycleAsyncStorage } from '../../client/components/request-lifecycle-async-storage.external'
 
 export type GetDynamicParamFromSegment = (
   // [slug] / [[slug]] / [...slug]
@@ -1499,7 +1500,12 @@ export const renderToHTMLOrFlight: AppPageRender = (
 
   return RequestAsyncStorageWrapper.wrap(
     renderOpts.ComponentMod.requestAsyncStorage,
-    { req, res, renderOpts },
+    {
+      req,
+      res,
+      renderOpts,
+      lifecycle: requestLifecycleAsyncStorage.getStore(),
+    },
     (requestStore) =>
       StaticGenerationAsyncStorageWrapper.wrap(
         renderOpts.ComponentMod.staticGenerationAsyncStorage,
